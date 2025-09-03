@@ -54,10 +54,11 @@ cancer |>
 #IN tumor tissue there is negative correlation between brca1 and brca2
 
 #HEATMAP
-gene_
-
-
-
-
+gene_of_interest<-c('BRCA1','BRCA2','TP53','ALK','MYCN')
+cancer |> 
+  filter(gene %in% gene_of_interest ) |>  
+  ggplot(aes(x=samples , y= gene,fill = fpkm)) +
+  geom_tile()+
+  scale_fill_gradient(low = 'white',high = 'red')
 
 
