@@ -42,11 +42,19 @@ cancer |>
   ggplot(aes(x= BRCA1, y = BRCA2,color = tissue_type))+
   geom_point()
 
+#CORRELATION(ADD STATS)
 
+cancer |> 
+  filter(gene=='BRCA1'| gene=='BRCA2') |> 
+  spread(key = gene,value = fpkm) |> 
+  ggplot(aes(x= BRCA1, y = BRCA2,color = tissue_type))+
+  geom_point()+
+  geom_smooth(method = 'lm',se = F)
+#IN NORMAL TISSUE THERE IS A POSITIVE CORRELATION BETWEEN brca1 AND brca2
+#IN tumor tissue there is negative correlation between brca1 and brca2
 
-
-
-
+#HEATMAP
+gene_
 
 
 
