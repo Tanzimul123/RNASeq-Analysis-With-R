@@ -64,7 +64,7 @@ write.csv(counts_final_data,'GSE183947_counts_matrix.csv',row.names = F)#row.nam
 
 #metastatic state is a group
 #tissue type is a group
-#how the fpkm is differing by tissue
+#how the fpkm of a partcular gene  is differing by tissue
 #TISSUE_TYPE & GENE BECAUSE WE HAVE TWO VARIABLES
 #mean_fpkm is written just to add a column name in the console
 
