@@ -23,7 +23,7 @@ countdata <- seqdata[,-(1:2)]
 # Look at the output
 head(countdata)
 
-
+#
 
 
 
@@ -106,5 +106,52 @@ logcounts_norm <- cpm(y, log = TRUE)
 boxplot(logcounts_norm, xlab = "", ylab = "Log2 counts per million", las = 2) 
 abline(h=median(logcounts_norm),col="blue")
 title("Boxplots of logCPMs (normalised)")
+
+
+## Let's choose purple for basal and orange for luminal
+col.cell <- c("purple", "orange")[sampleinfo$CellType]
+#Plot MDS plot
+plotMDS(y, col = col.cell)
+legend("topleft", fill = c("purple", "orange"), legend = levels(sampleinfo$CellType))
+title("MDS Plot by Cell Type")
+
+
+# We estimate the variance for each row in the logcounts matrix
+var_genes <- apply(logcounts, 1, var)
+head(var_genes)
+
+
+
+# Get the gene names for the top 500 most variable genes
+select_var <- names(sort(var_genes, decreasing=TRUE))[1:500]
+head(select_var)
+
+
+ 
+# Subset logcounts matrix
+highly_variable_lcpm <- logcounts[select_var,]
+dim(highly_variable_lcpm)
+#Load the Libraries
+library(RColorBrewer)
+library(gplots)
+library(NMF)
+
+
+# 1. Define the palette and color function
+mypalette <- brewer.pal(11,"RdYlBu")
+morecols <- colorRampPalette(mypalette)
+
+# 2. Open the PNG graphics device
+png(file="new_High_var_genes.heatmap.png")
+
+# 3. Create the aheatmap plot (Fix: Missing closing parenthesis)
+aheatmap(
+  highly_variable_lcpm,
+  col = rev(morecols(50)),
+  main = "Top 500 most variable genes across samples")  
+# 4. Close the graphics device to save the file
+dev.off()
+
+
 
 
