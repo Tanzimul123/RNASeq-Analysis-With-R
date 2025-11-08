@@ -174,3 +174,39 @@ fit.cont <- contrasts.fit(fit, cont.matrix)
 fit.cont <- eBayes(fit.cont)
 summary(decideTests(fit.cont))
 
+# Extract all genes from the contrast fit object
+all_genes <- topTable(fit.cont, coef = 1, number = Inf, adjust = "fdr")
+# write all genes results in a csv file
+write.csv(all_genes,"all_genes.csv")
+
+# Assuming the contrast name you used was 'CR_vs_NR'
+# and the results table from the summary(decideTests) step is named 'summa.fit'
+# 1. Store the results of decideTests() into the variable 'summa.fit'
+summa.fit <- decideTests(fit.cont)
+summary(summa.fit)
+par(mfrow=c(1,2))
+
+plotMD(fit.cont, 
+       coef = 1, # Use the first (and only) contrast in your model
+       status = summa.fit[,"CR_vs_NR"], # CORRECTED: Use the new contrast name
+       values = c(-1, 1), # Highlight down-regulated (-1) and up-regulated (1) genes
+       hl.col = c("blue", "red") # FIXED: Use clear colors, e.g., blue and red
+)
+
+
+
+# Highlight the top 100 most differentially expressed (DE) genes
+# and label them using the gene symbols.
+
+volcanoplot(
+  fit.cont, 
+  coef = 1, # Use the first (and only) contrast, CR_vs_NR
+  highlight = 100, 
+  # CORRECTED: Gene symbols are in 'v$genes$SYMBOL' or 'fit.cont$genes$SYMBOL' if available,
+  # but the simplest way to get symbols is often from the original 'y' or 'v' object.
+  # Assuming the gene symbols were stored in the 'genes' data frame of the 'v' object:
+  names = v$genes$SYMBOL, 
+  main = "Calorie Restriction vs. Non-Restricted" # FIXED: Use a descriptive title
+)
+
+
