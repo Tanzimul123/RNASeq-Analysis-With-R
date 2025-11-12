@@ -7,12 +7,24 @@ library(gplots)
 library(RColorBrewer)
 library(NMF)
 library(GEOquery)
+library(org.Sc.sgd.db)
+library(AnnotationDbi)
 
 
 #Read the data into R
 Yeast_data <- read.delim("FPKM_NR_CR(YEAST under restricted calorie).txt", stringsAsFactors = FALSE)
 View(Yeast_data)
+# Find rows where the gene_id is NOT a valid number (i.e., missing/NA/blank)
+Yeast_data_clean <- Yeast_data[!is.na(Yeast_data$gene_id) & Yeast_data$gene_id != "", ]
+# Find and remove any explicit duplicate Entrez IDs
+Yeast_data_clean <- Yeast_data_clean[!duplicated(Yeast_data_clean$gene_id), ]
 
+# 3. Set the row names using the now-unique 'gene_id' column.
+rownames(Yeast_data_clean) <- Yeast_data_clean$gene_id
+
+View(Yeast_data_clean)
+
+ 
 
 #get metadata
 library(GEOquery)
@@ -31,14 +43,14 @@ colnames(metadata3)<-c('ID','Sample','status')
 View(metadata3)
 
 # using substr, you extract the characters starting at position 1 and stopping at position 7 of
-colnames(Yeast_data) <- substr(colnames(Yeast_data),start=1,stop=8)
-head(Yeast_data)
+colnames(Yeast_data_clean) <- substr(colnames(Yeast_data_clean),start=1,stop=8)
+head(Yeast_data_clean)
 #Check whether the names of the sampleinfo file and the colnames of the countdata are same or not
-colnames(Yeast_data)[4:7]==metadata3$Sample
+colnames(Yeast_data_clean)[4:7]==metadata3$Sample
 
 
 #Apply DGEList fucntion on Count Data
-y <- DGEList(Yeast_data)
+y <- DGEList(Yeast_data_clean)
 # have a look at y
 y
 
@@ -51,6 +63,26 @@ group <- factor(group)
 # Add the group information into the DGEList
 y$samples$group <- group
 y$samples
+
+#annotation
+library(org.Sc.sgd.db) 
+library(AnnotationDbi)
+
+keytypes(org.Sc.sgd.db)
+#Annotate the genes using the yeast as reference
+#ann <- select(org.Sc.sgd.db,keys=rownames(y$genes$ORF),columns=c("ENTREZID","DESCRIPTION","GENENAME","GO", "ORF")keytype = "ORF")
+
+# Annotate genes using org.Sc.sgd.db
+ann <- AnnotationDbi::select(org.Sc.sgd.db,
+                             keys = Yeast_data_clean$gene_id,
+                             columns = c("ENTREZID","DESCRIPTION","GENENAME","GO", "ORF"),
+                             keytype = "ORF")
+
+#Add the genes to your DGEList
+y$genes <- ann
+
+#Check the output
+head(y$genes)
 
 
 # Convert the FPKM matrix (y$counts) to log2(FPKM + pseudocount)
@@ -104,6 +136,8 @@ head(var_genes)
 # Get the gene names for the top 500 most variable genes
 select_var <- names(sort(var_genes, decreasing=TRUE))[1:500]
 head(select_var)
+ 
+select_var
 
 
 
@@ -168,7 +202,7 @@ names(fit)
 # Compare the Calorie-Restricted group (CR) against the Non-Restricted group (NR)
 # The coefficient for the second group (NR) is subtracted from the first (CR).
 cont.matrix <- makeContrasts(CR_vs_NR = CR - NR, levels = design) 
-
+cont.matrix
 # Re-run the fitting steps with the corrected contrast matrix
 fit.cont <- contrasts.fit(fit, cont.matrix)
 fit.cont <- eBayes(fit.cont)
@@ -205,8 +239,99 @@ volcanoplot(
   # CORRECTED: Gene symbols are in 'v$genes$SYMBOL' or 'fit.cont$genes$SYMBOL' if available,
   # but the simplest way to get symbols is often from the original 'y' or 'v' object.
   # Assuming the gene symbols were stored in the 'genes' data frame of the 'v' object:
-  names = v$genes$SYMBOL, 
+  names = v$genes$ORF, 
   main = "Calorie Restriction vs. Non-Restricted" # FIXED: Use a descriptive title
 )
+
+## gene ontology analysis
+library(org.Sc.sgd.db)
+library(AnnotationDbi)
+
+fit.cont
+View(fit.cont)
+# 1. Get the indices of significantly DE genes from the decideTests result
+#    'summa.fit' contains 1 (Up), -1 (Down), and 0 (Not DE)
+is_de <- which(summa.fit[, "CR_vs_NR"] != 0)
+summa.fit
+View(summa.fit)
+
+# 2. Extract the SGD ORF IDs for only the DE genes
+de_orf_ids <- rownames(fit.cont)[is_de]
+de_orf_ids
+length(de_orf_ids)
+
+# Check how many DE genes you found
+print(paste("Number of Differentially Expressed Genes:", length(de_orf_ids)))
+
+
+# Columns available in org.Sc.sgd.db (use 'columns(org.Sc.sgd.db)' to see all)
+desired_columns <- c(
+  "ORF",        # The input key (for confirmation)
+  "GENENAME",   # Common Name (Gene Symbol)
+  "DESCRIPTION", # Full Description
+  "GO"          # Gene Ontology ID
+)
+
+
+# Load the annotation package (already in your session)
+library(org.Sc.sgd.db) 
+library(AnnotationDbi)
+
+# Retrieve the annotations
+de_gene_annotations <- AnnotationDbi::select(
+  x = org.Sc.sgd.db,
+  keys = de_orf_ids,
+  columns = desired_columns,
+  keytype = "ORF" # We are searching using the SGD ORF ID
+)
+
+# View the structure of the result
+head(de_gene_annotations)
+dim(de_gene_annotations)
+View(all_genes) 
+ 
+de_orf_ids
+
+# 1. Store the Entrez IDs in a clean vector
+de_entrez_ids <- de_orf_ids # We established these are Entrez IDs
+
+# 2. Extract the statistical data for only these significant genes from fit.cont
+de_stats_table <- topTable(
+  fit.cont, 
+  coef = "CR_vs_NR", 
+  number = length(de_entrez_ids), 
+  genelist = de_entrez_ids # Filter to ONLY the significant IDs
+)
+
+# 3. Add the Regulation Status column
+de_stats_table$Regulation_Status <- ifelse(
+  de_stats_table$logFC > 0, 
+  "Up-regulated (CR > NR)", 
+  "Down-regulated (CR < NR)"
+)
+
+# 4. Filter the table to see only the UP-regulated genes
+upregulated_genes <- de_stats_table[de_stats_table$Regulation_Status == "Up-regulated (CR > NR)", ]
+
+# 5. Filter the table to see only the DOWN-regulated genes
+downregulated_genes <- de_stats_table[de_stats_table$Regulation_Status == "Down-regulated (CR < NR)", ]
+
+
+View(de_stats_table)
+# View the top 10 most up-regulated genes
+head(upregulated_genes[order(upregulated_genes$logFC, decreasing = TRUE), 
+                       c("logFC", "adj.P.Val", "Regulation_Status")], 10)
+
+# View the top 10 most down-regulated genes
+head(downregulated_genes[order(downregulated_genes$logFC, decreasing = FALSE), 
+                         c("logFC", "adj.P.Val", "Regulation_Status")], 10)
+
+
+
+
+
+
+ 
+
 
 
