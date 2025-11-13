@@ -2,7 +2,6 @@
 #Loading the Libraries
 library(edgeR)
 library(limma)
-library(org.Mm.eg.db)
 library(gplots)
 library(RColorBrewer)
 library(NMF)
@@ -14,6 +13,7 @@ library(AnnotationDbi)
 #Read the data into R
 Yeast_data <- read.delim("FPKM_NR_CR(YEAST under restricted calorie).txt", stringsAsFactors = FALSE)
 View(Yeast_data)
+
 # Find rows where the gene_id is NOT a valid number (i.e., missing/NA/blank)
 Yeast_data_clean <- Yeast_data[!is.na(Yeast_data$gene_id) & Yeast_data$gene_id != "", ]
 # Find and remove any explicit duplicate Entrez IDs
@@ -65,12 +65,9 @@ y$samples$group <- group
 y$samples
 
 #annotation
-library(org.Sc.sgd.db) 
-library(AnnotationDbi)
-
+ 
 keytypes(org.Sc.sgd.db)
-#Annotate the genes using the yeast as reference
-#ann <- select(org.Sc.sgd.db,keys=rownames(y$genes$ORF),columns=c("ENTREZID","DESCRIPTION","GENENAME","GO", "ORF")keytype = "ORF")
+
 
 # Annotate genes using org.Sc.sgd.db
 ann <- AnnotationDbi::select(org.Sc.sgd.db,
@@ -137,9 +134,6 @@ head(var_genes)
 select_var <- names(sort(var_genes, decreasing=TRUE))[1:500]
 head(select_var)
  
-select_var
-
-
 
 # Subset logcounts matrix
 highly_variable_lcpm <- logcounts[select_var,]
@@ -243,9 +237,6 @@ volcanoplot(
   main = "Calorie Restriction vs. Non-Restricted" # FIXED: Use a descriptive title
 )
 
-## gene ontology analysis
-library(org.Sc.sgd.db)
-library(AnnotationDbi)
 
 fit.cont
 View(fit.cont)
@@ -273,9 +264,6 @@ desired_columns <- c(
 )
 
 
-# Load the annotation package (already in your session)
-library(org.Sc.sgd.db) 
-library(AnnotationDbi)
 
 # Retrieve the annotations
 de_gene_annotations <- AnnotationDbi::select(
