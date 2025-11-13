@@ -7,14 +7,53 @@ library(RColorBrewer)
 library(NMF) 
 
 seqdata <- read.delim("GSE60450_LactationGenewiseCounts.txt", stringsAsFactors = FALSE)
-# Read the sample information into R
-sampleinfo <- read.delim("SampleInfo_Corrected (1).txt", stringsAsFactors = TRUE)
+View(seqdata)
+
+
+# preparing metadata THROUGH CODE
+meta <- read.delim("GSE60450_series_matrix.txt", 
+                   header = FALSE, 
+                   comment.char = "!")
+head(meta)
+# Read all lines
+lines <- readLines( 'GSE60450_series_matrix.txt')
+
+# Extract metadata rows
+titles <- grep("!Sample_title", lines, value = TRUE)
+sources <- grep("!Sample_source_name_ch1", lines, value = TRUE)
+characteristics <- grep("!Sample_characteristics_ch1", lines, value = TRUE)
+
+# Convert metadata fields to table
+get_values <- function(x) {
+  strsplit(sub("!Sample_.*?\t", "", x), "\t")[[1]]
+}
+
+sample_titles <- get_values(titles)
+sample_sources <- get_values(sources)
+sample_characteristics <- get_values(characteristics)
+
+metadata <- data.frame(
+  title = sample_titles,
+  source = sample_sources,
+  condition = sample_characteristics
+)
+
+View(metadata)
+
+
+
+# Read the sample information into R PROVIDED IN THE BLOG
+sampleinfo <- read.delim("SampleInfo_Corrected (GSE60450).txt", stringsAsFactors = TRUE)
+
+#metadata prepared through excel after downloading from GREIN
+sampleinfo2 <- read.delim("GSE60450_full_metadata.txt", stringsAsFactors = TRUE)
+
 
 #Check first 6 lines of the count data
 head(seqdata)
 #Check the sample information data
 sampleinfo
-
+sampleinfo2
 
 #Set the rowname to geneid
 rownames(seqdata) <- seqdata$EntrezGeneID
@@ -119,8 +158,8 @@ title("MDS Plot by Cell Type")
 # We estimate the variance for each row in the logcounts matrix
 var_genes <- apply(logcounts, 1, var)
 head(var_genes)
-
-
+var_genes
+View(var_genes)
 
 # Get the gene names for the top 500 most variable genes
 select_var <- names(sort(var_genes, decreasing=TRUE))[1:500]
@@ -131,6 +170,8 @@ head(select_var)
 # Subset logcounts matrix
 highly_variable_lcpm <- logcounts[select_var,]
 dim(highly_variable_lcpm)
+
+
 #Load the Libraries
 library(RColorBrewer)
 library(gplots)
@@ -152,6 +193,72 @@ aheatmap(
 # 4. Close the graphics device to save the file
 dev.off()
 
+getwd()
+# preparing design matrix
+group
+design <- model.matrix(~ 0 + group)
+colnames(design) <- levels(group)
+design
 
+# VOOM TRANSFORMATION
+par(mfrow=c(1,1))
+v <- voom(y,design,plot = TRUE)
+
+
+
+# Keep running this until the console says "null device" or "Error in dev.off(): cannot shut down device 1 (the null device)"
+# Then re-run the voom command:
+v <- voom(y, design, plot = TRUE)
+
+#CREATING LINEAR MODEL
+fit <- lmFit(v)
+names(fit)
+
+#CREATING CONTRAST AND FITTING
+# 1. Create the contrast matrix (FIX: Missing closing parenthesis for makeContrasts)
+cont.matrix <- makeContrasts(B.PregVsLac = basal.pregnant - basal.lactate, 
+                             levels = design)
+
+# 2. Fit the contrasts to the linear model fit
+fit.cont <- contrasts.fit(fit, cont.matrix)
+
+# 3. Apply the empirical Bayes smoothing to the contrasts fit
+fit.cont <- eBayes(fit.cont)
+
+# 4. Summarize the results of the differential expression tests
+summary(decideTests(fit.cont))
+# Create the summa.fit object needed for the plotting status argument
+summa.fit <- decideTests(fit.cont)
+
+#SAVING RESULT AND VISUALIZATION
+# Extract all genes from the contrast fit object
+all_genes <- topTable(fit.cont, coef = 1, number = Inf, adjust = "fdr")
+# write all genes results in a csv file
+write.csv(all_genes,"all_genes.csv")
+
+#CREATING MD PLOT AND VOLCANO PLOT
+# We want to highlight the significant genes.
+par(mfrow=c(1,2))
+
+# 1. Plot the Mean-Difference (MD) Plot (FIX: Missing closing parenthesis and hl.col value)
+plotMD(fit.cont,
+       coef=1,
+       status=summa.fit[,"B.PregVsLac"], 
+       values = c(-1, 1), 
+       hl.col=c("blue", "red") # <- FIXED: Added the second color for positive logFC, and closed the parenthesis
+)
+
+# 2. Plot the Volcano Plot (FIX: Missing closing parenthesis for volcanoplot)
+volcanoplot(fit.cont,
+            coef=1,
+            highlight=100,
+            names=fit.cont$genes$SYMBOL, 
+            main="B.PregVsLac") # <- FIXED: Closed the parenthesis
+
+
+# gene ontology analysis
+BiocManager::install("GO.db")
+go <- goana(fit.cont, coef = "B.PregVsLac", species = "Mm")
+topGO(go, n = 10)
 
 
